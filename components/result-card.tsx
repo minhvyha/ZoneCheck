@@ -45,7 +45,7 @@ export function ResultCard({ data }: ResultCardProps) {
       link.href = dataUrl
       link.click()
     } catch (err) {
-      console.error("[v0] Failed to generate image:", err)
+      console.error("Failed to generate image:", err)
     } finally {
       setIsDownloading(false)
     }
