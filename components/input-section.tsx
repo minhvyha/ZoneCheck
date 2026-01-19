@@ -671,33 +671,7 @@ export function InputSection() {
           </div>
         </div>
       </div>
-      {zoneAnalysis && (
-  <div className="mt-4 rounded-lg border p-3">
-    {zoneAnalysis.error ? (
-      <div className="text-sm text-red-600">{zoneAnalysis.error}</div>
-    ) : (
-      <>
-        <div className="text-xs text-muted-foreground">File HR summary</div>
-        <div className="mt-2 text-sm">
-          <div>Samples: {zoneAnalysis.samplesCount}</div>
-          <div>Duration with HR: {Math.round(zoneAnalysis.totalHrSeconds)} s</div>
-          <div>Avg HR: {zoneAnalysis.avgHr ?? '--'} BPM</div>
-          <div>Min HR: {zoneAnalysis.minHr ?? '--'} BPM</div>
-          <div>Max HR: {zoneAnalysis.maxHr ?? '--'} BPM</div>
-        </div>
-
-        <div className="mt-3">
-          {zoneAnalysis.zoneTimes.map((z: ZoneTime) => (
-            <div key={z.label} className="flex items-center justify-between text-sm border-t py-2">
-              <div>{z.label} — {z.percent}%</div>
-              <div>{Math.round(z.seconds)} s</div>
-            </div>
-          ))}
-        </div>
-      </>
-    )}
-  </div>
-)}
+     
     </>
   );
 }
