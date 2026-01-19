@@ -38,7 +38,7 @@ const zones = [
   },
 ]
 
-export function ZoneBreakdown() {
+export function ZoneBreakdown({}) {
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-medium text-muted-foreground">

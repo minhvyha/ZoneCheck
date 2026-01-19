@@ -14,6 +14,8 @@ const zoneData = [
   { name: "Zone Distribution", zone1: 8, zone2: 52, zone3: 22, zone4: 13, zone5: 5 },
 ]
 
+
+
 const COLORS = {
   zone1: "#6b7280", // Grey
   zone2: "#00d4ff", // Electric Cyan
@@ -30,7 +32,7 @@ const ZONE_LABELS = {
   zone5: "Zone 5",
 }
 
-export function ZoneChart() {
+export function ZoneChart({  }) {
   return (
     <div className="mb-8">
       <h3 className="mb-4 text-sm font-medium text-muted-foreground">
