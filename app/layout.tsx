@@ -8,9 +8,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'ZoneUnlock - Training Zone Analyzer',
+  title: 'ZoneCheck - Training Zone Analyzer',
   description: 'Visualize your training zones from raw GPX/FIT files. No paywalls, just data.',
-  generator: 'v0.app',
   icons: {
     icon: [
       {

@@ -29,37 +29,109 @@ interface FormulaInfo {
   requiresRestingHr?: boolean
 }
 
+type Zone = {
+  label: string
+  percentMin: number
+  percentMax: number
+  bpmMin: number
+  bpmMax: number
+}
+
+/* ---------- Formula implementations as named functions ---------- */
+
+function foxFormula(age: number) {
+  return 220 - age
+}
+
+function tanakaFormula(age: number) {
+  return Math.round(208 - 0.7 * age)
+}
+
+function huntFormula(age: number) {
+  return Math.round(211 - 0.64 * age)
+}
+
+function karvonenFormula(age: number, restingHr = 60) {
+  const maxHr = 220 - age
+  return Math.round(maxHr)
+}
+
+function customFormula(_age: number, _restingHr?: number) {
+  return 0
+}
+
+/* ---------- Formulas map ---------- */
+
 const formulas: Record<FormulaType, FormulaInfo> = {
   fox: {
     name: "Fox Formula",
     description: "220 - age (Classic formula)",
-    calculate: (age) => 220 - age,
+    calculate: foxFormula,
   },
   tanaka: {
     name: "Tanaka Formula",
     description: "208 - (0.7 x age) (More accurate for 40+)",
-    calculate: (age) => Math.round(208 - 0.7 * age),
+    calculate: tanakaFormula,
   },
   hunt: {
     name: "HUNT Formula",
     description: "211 - (0.64 x age) (For active individuals)",
-    calculate: (age) => Math.round(211 - 0.64 * age),
+    calculate: huntFormula,
   },
   karvonen: {
     name: "Karvonen Method",
     description: "Uses heart rate reserve (HRR)",
-    calculate: (age, restingHr = 60) => {
-      const maxHr = 220 - age
-      return Math.round(maxHr)
-    },
+    calculate: karvonenFormula,
     requiresRestingHr: true,
   },
   custom: {
     name: "Custom",
     description: "Enter your own max heart rate",
-    calculate: () => 0,
+    calculate: customFormula,
   },
 }
+
+/* ---------- Zone percentages ---------- */
+
+const BASE_ZONE_PERCENTAGES = [
+  { label: "Zone 1", min: 0.5, max: 0.6 },
+  { label: "Zone 2", min: 0.6, max: 0.7 },
+  { label: "Zone 3", min: 0.7, max: 0.8 },
+  { label: "Zone 4", min: 0.8, max: 0.9 },
+  { label: "Zone 5", min: 0.9, max: 1.0 },
+]
+
+function computeZones(maxHr: number, restingHr: number, useHrr: boolean): Zone[] {
+  const hrMax = Math.max(30, Math.round(maxHr))
+  const rest = Math.max(30, Math.round(restingHr))
+  const hrr = Math.max(0, hrMax - rest)
+
+  return BASE_ZONE_PERCENTAGES.map((p) => {
+    if (useHrr) {
+      const bpmMin = Math.round(rest + hrr * p.min)
+      const bpmMax = Math.round(rest + hrr * p.max)
+      return {
+        label: p.label,
+        percentMin: Math.round(p.min * 100),
+        percentMax: Math.round(p.max * 100),
+        bpmMin,
+        bpmMax,
+      }
+    }
+
+    const bpmMin = Math.round(hrMax * p.min)
+    const bpmMax = Math.round(hrMax * p.max)
+    return {
+      label: p.label,
+      percentMin: Math.round(p.min * 100),
+      percentMax: Math.round(p.max * 100),
+      bpmMin,
+      bpmMax,
+    }
+  })
+}
+
+/* ---------- Component ---------- */
 
 export function InputSection() {
   const [formula, setFormula] = useState<FormulaType>("fox")
@@ -69,6 +141,7 @@ export function InputSection() {
   const [isDragOver, setIsDragOver] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
 
+  /* ---------- Derived value ---------- */
   const calculatedMaxHr = useMemo(() => {
     if (formula === "custom") return parseInt(customMaxHr) || 0
     const ageNum = parseInt(age) || 30
@@ -76,8 +149,83 @@ export function InputSection() {
     return formulas[formula].calculate(ageNum, restingHrNum)
   }, [formula, age, restingHr, customMaxHr])
 
+  /* ---------- Compute zones for every formula and keep them in a variable ---------- */
+  const allZones = useMemo(() => {
+    const ageNum = parseInt(age) || 30
+    const restingNum = parseInt(restingHr) || 60
+    const customNum = parseInt(customMaxHr) || 0
+
+    return {
+      fox: computeZones(foxFormula(ageNum), restingNum, false),
+      tanaka: computeZones(tanakaFormula(ageNum), restingNum, false),
+      hunt: computeZones(huntFormula(ageNum), restingNum, false),
+      karvonen: computeZones(karvonenFormula(ageNum, restingNum), restingNum, true),
+      custom: computeZones(customNum, restingNum, false),
+    } as Record<FormulaType, Zone[]>
+  }, [age, restingHr, customMaxHr])
+
+  // current zones for the selected formula stored in a variable
+  const zonesForSelectedFormula = allZones[formula]
+
+  /* ---------- Handlers as named functions ---------- */
+
+  const onFormulaChange = useCallback((value: FormulaType) => {
+    setFormula(value)
+  }, [])
+
+  const onAgeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    if (val === "") {
+      setAge("")
+      return
+    }
+    const num = parseInt(val)
+    if (!Number.isNaN(num)) {
+      const clamped = Math.max(1, Math.min(120, num))
+      setAge(String(clamped))
+    }
+  }, [])
+
+  const onRestingHrChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value
+      if (val === "") {
+        setRestingHr("")
+        return
+      }
+      const num = parseInt(val)
+      if (!Number.isNaN(num)) {
+        setRestingHr(String(num))
+      }
+    },
+    []
+  )
+
+  const onCustomMaxHrChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value
+      if (val === "") {
+        setCustomMaxHr("")
+        return
+      }
+      const num = parseInt(val)
+      if (!Number.isNaN(num)) {
+        const clamped = Math.max(100, Math.min(250, num))
+        setCustomMaxHr(String(clamped))
+      }
+    },
+    []
+  )
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    try {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore - some browsers expose dataTransfer.dropEffect
+      e.dataTransfer.dropEffect = "copy"
+    } catch {
+      // ignore if not supported
+    }
     setIsDragOver(true)
   }, [])
 
@@ -89,10 +237,12 @@ export function InputSection() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
-    const files = e.dataTransfer.files
-    if (files.length > 0) {
+    const dt = e.dataTransfer
+    if (!dt) return
+    const files = dt.files
+    if (files && files.length > 0) {
       const file = files[0]
-      if (file.name.endsWith(".gpx") || file.name.endsWith(".fit")) {
+      if (isSupportedWorkoutFile(file.name)) {
         setFileName(file.name)
       }
     }
@@ -102,11 +252,21 @@ export function InputSection() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files
       if (files && files.length > 0) {
-        setFileName(files[0].name)
+        const file = files[0]
+        if (isSupportedWorkoutFile(file.name)) {
+          setFileName(file.name)
+        }
       }
     },
     []
   )
+
+  /* ---------- Utility helpers ---------- */
+
+  function isSupportedWorkoutFile(name: string) {
+    const lower = name.toLowerCase()
+    return lower.endsWith(".gpx") || lower.endsWith(".fit")
+  }
 
   const selectedFormula = formulas[formula]
 
@@ -138,7 +298,7 @@ export function InputSection() {
               </div>
               <Select
                 value={formula}
-                onValueChange={(v) => setFormula(v as FormulaType)}
+                onValueChange={(v) => onFormulaChange(v as FormulaType)}
               >
                 <SelectTrigger
                   id="formula"
@@ -175,7 +335,7 @@ export function InputSection() {
                     id="age"
                     type="number"
                     value={age}
-                    onChange={(e) => setAge(e.target.value)}
+                    onChange={onAgeChange}
                     placeholder="e.g. 30"
                     min="1"
                     max="120"
@@ -208,7 +368,7 @@ export function InputSection() {
                     id="restingHr"
                     type="number"
                     value={restingHr}
-                    onChange={(e) => setRestingHr(e.target.value)}
+                    onChange={onRestingHrChange}
                     placeholder="e.g. 60"
                     min="30"
                     max="120"
@@ -229,7 +389,7 @@ export function InputSection() {
                     id="customMaxHr"
                     type="number"
                     value={customMaxHr}
-                    onChange={(e) => setCustomMaxHr(e.target.value)}
+                    onChange={onCustomMaxHrChange}
                     placeholder="e.g. 185"
                     min="100"
                     max="250"
@@ -254,10 +414,25 @@ export function InputSection() {
               </div>
               {formula === "karvonen" && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Heart Rate Reserve: {calculatedMaxHr - parseInt(restingHr || "60")}{" "}
-                  BPM
+                  Heart Rate Reserve: {calculatedMaxHr - parseInt(restingHr || "60")} BPM
                 </p>
               )}
+
+              {/* Display zones for the selected formula */}
+              <div className="mt-3">
+                <h4 className="text-xs font-medium text-muted-foreground">Training zones</h4>
+                <div className="mt-2 grid gap-2">
+                  {zonesForSelectedFormula.map((z) => (
+                    <div key={z.label} className="flex items-center justify-between rounded-md border border-border p-2">
+                      <div className="text-sm">
+                        <div className="font-medium">{z.label}</div>
+                        <div className="text-xs text-muted-foreground">{z.percentMin}% - {z.percentMax}%</div>
+                      </div>
+                      <div className="text-sm font-semibold">{z.bpmMin} - {z.bpmMax} BPM</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -277,8 +452,8 @@ export function InputSection() {
                 isDragOver
                   ? "border-primary bg-primary/10"
                   : fileName
-                    ? "border-primary/50 bg-primary/5"
-                    : "border-border bg-input hover:border-primary/50 hover:bg-muted"
+                  ? "border-primary/50 bg-primary/5"
+                  : "border-border bg-input hover:border-primary/50 hover:bg-muted"
               }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}

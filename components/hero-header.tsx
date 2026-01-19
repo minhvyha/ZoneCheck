@@ -10,7 +10,7 @@ export function HeroHeader() {
           <Activity className="h-6 w-6 text-primary" />
         </div>
         <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-          Zone<span className="text-primary">Unlock</span>
+          Zone<span className="text-primary">Check</span>
         </h1>
       </div>
       <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground">
