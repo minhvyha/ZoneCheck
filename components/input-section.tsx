@@ -532,8 +532,8 @@ export function InputSection({ onAnalysisComplete }: InputSectionProps) {
   }
 
   return (
-    <>
-      <Card className="mb-10 border-primary/30 bg-card shadow-lg shadow-primary/5">
+    <div className="flex flex-row gap-4">
+      <Card className="mb-4 border-primary/30 bg-card shadow-lg shadow-primary/5 flex-2">
         <CardContent className="p-6 sm:p-8">
           <div className="grid gap-8 lg:grid-cols-2">
             {/* Max Heart Rate Calculator */}
@@ -564,7 +564,7 @@ export function InputSection({ onAnalysisComplete }: InputSectionProps) {
                 >
                   <SelectTrigger
                     id="formula"
-                    className="h-11 border-border bg-input text-foreground"
+                    className="h-11 border-border bg-input text-foreground w-full"
                   >
                     <SelectValue placeholder="Select formula" />
                   </SelectTrigger>
@@ -584,9 +584,9 @@ export function InputSection({ onAnalysisComplete }: InputSectionProps) {
               </div>
 
               {/* Inputs based on formula */}
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-row">
                 {formula !== "custom" && (
-                  <div className="space-y-2">
+                  <div className="space-y-2 flex-1">
                     <Label
                       htmlFor="age"
                       className="text-xs font-medium text-muted-foreground"
@@ -601,7 +601,7 @@ export function InputSection({ onAnalysisComplete }: InputSectionProps) {
                       placeholder="e.g. 30"
                       min="1"
                       max="120"
-                      className="h-11 border-border bg-input text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary"
+                      className="h-11  border-border bg-input text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary"
                     />
                   </div>
                 )}
@@ -719,7 +719,7 @@ export function InputSection({ onAnalysisComplete }: InputSectionProps) {
         </CardContent>
       </Card>
       {/* Calculated Result */}
-      <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 mb-10">
+      <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 mb-4 flex-1">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-muted-foreground">
             Your Max HR
@@ -763,6 +763,6 @@ export function InputSection({ onAnalysisComplete }: InputSectionProps) {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

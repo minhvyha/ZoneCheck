@@ -4,7 +4,7 @@ import { Activity } from "lucide-react"
 
 export function HeroHeader() {
   return (
-    <header className="mb-12 text-center">
+    <header className="mb-4 text-center">
       <div className="mb-6 flex items-center justify-center gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
           <Activity className="h-6 w-6 text-primary" />
@@ -14,7 +14,7 @@ export function HeroHeader() {
         </h1>
       </div>
       <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground">
-        Visualize your training zones from raw GPX/FIT files. No paywalls, just data.
+        Visualize your training zones from raw GPX/FIT files.
       </p>
     </header>
   )
