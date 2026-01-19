@@ -144,6 +144,7 @@ export function InputSection() {
   const [customMaxHr, setCustomMaxHr] = useState("185");
   const [isDragOver, setIsDragOver] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [zoneAnalysis, setZoneAnalysis] = useState<any | null>(null);
 
   /* ---------- Derived value ---------- */
   const calculatedMaxHr = useMemo(() => {
@@ -174,6 +175,48 @@ export function InputSection() {
 
   // current zones for the selected formula stored in a variable
   const zonesForSelectedFormula = allZones[formula];
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      const file = files[0];
+      if (!isSupportedWorkoutFile(file.name)) return;
+      setFileName(file.name);
+
+      try {
+        let samples: Sample[] = [];
+        if (file.name.toLowerCase().endsWith(".gpx")) {
+          samples = await parseGpxFile(file);
+        } else if (file.name.toLowerCase().endsWith(".fit")) {
+          samples = await parseFitFile(file);
+        }
+
+        // if no HR samples found
+        if (!samples.length || samples.every((s) => s.hr == null)) {
+          setZoneAnalysis({ error: "No heart rate data found in file." });
+          return;
+        }
+
+        // compute zones for the currently selected formula
+        const ageNum = parseInt(age) || 30;
+        const restingNum = parseInt(restingHr) || 60;
+        const maxHr =
+          formula === "custom"
+            ? parseInt(customMaxHr) || 0
+            : formulas[formula].calculate(ageNum, restingNum);
+        const useHrr = formula === "karvonen";
+        const zones = computeZones(maxHr, restingNum, useHrr);
+
+        const analysis = computeTimeInZonesFromSamples(samples, zones);
+        setZoneAnalysis({ samplesCount: samples.length, zones, ...analysis });
+      } catch (err) {
+        console.error(err);
+        setZoneAnalysis({ error: "Failed to parse file." });
+      }
+    },
+    [formula, age, restingHr, customMaxHr],
+  );
 
   /* ---------- Handlers as named functions ---------- */
 
@@ -256,19 +299,6 @@ export function InputSection() {
     }
   }, []);
 
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files;
-      if (files && files.length > 0) {
-        const file = files[0];
-        if (isSupportedWorkoutFile(file.name)) {
-          setFileName(file.name);
-        }
-      }
-    },
-    [],
-  );
-
   /* ---------- Utility helpers ---------- */
 
   function isSupportedWorkoutFile(name: string) {
@@ -277,6 +307,137 @@ export function InputSection() {
   }
 
   const selectedFormula = formulas[formula];
+
+  type Sample = { time: number /* epoch ms */; hr: number | null };
+  type ZoneTime = { label: string; seconds: number; percent: number };
+
+  // --- GPX parser (browser friendly) ---
+  async function parseGpxFile(file: File): Promise<Sample[]> {
+    const text = await file.text();
+    const doc = new DOMParser().parseFromString(text, "application/xml");
+    const trkpts = Array.from(doc.getElementsByTagName("trkpt"));
+    const samples: Sample[] = trkpts.map((tp) => {
+      // time
+      const timeEl = tp.getElementsByTagName("time")[0];
+      const time = timeEl ? Date.parse(timeEl.textContent || "") : NaN;
+
+      // hr can be <hr> or inside <extensions> as <gpxtpx:TrackPointExtension><gpxtpx:hr>NN</gpxtpx:hr></...>
+      let hr: number | null = null;
+      const hrEl = tp.getElementsByTagName("hr")[0];
+      if (hrEl && hrEl.textContent) {
+        hr = parseInt(hrEl.textContent, 10);
+      } else {
+        const exts = tp.getElementsByTagName("extensions");
+        if (exts.length) {
+          const extText = exts[0].innerHTML || exts[0].textContent || "";
+          const m = extText.match(/<gpxtpx:hr>(\d+)<\/gpxtpx:hr>/);
+          if (m) hr = parseInt(m[1], 10);
+        }
+      }
+
+      return { time: Number.isNaN(time) ? Date.now() : time, hr: hr ?? null };
+    });
+
+    // filter out entries with no time, keep order
+    return samples.filter((s) => !!s.time);
+  }
+
+  // --- FIT parser using `fit-file-parser` ---
+  async function parseFitFile(file: File): Promise<Sample[]> {
+    // dynamic import so bundlers can handle optional dependency
+    const { default: FitParser } = await import("fit-file-parser");
+    const parser = new FitParser({
+      force: true,
+      speedUnit: "km/h",
+      lengthUnit: "m",
+    });
+
+    const buffer = await file.arrayBuffer();
+    return await new Promise<Sample[]>((resolve, reject) => {
+      parser.parse(buffer as any, (err: any, data: any) => {
+        if (err) return reject(err);
+        // data.records is an array of record objects
+        const records = data.records || [];
+        const samples: Sample[] = records
+          .filter((r: any) => r.timestamp) // only records with timestamp
+          .map((r: any) => ({
+            time: new Date(r.timestamp).getTime(),
+            hr: typeof r.heart_rate === "number" ? r.heart_rate : null,
+          }));
+        resolve(samples);
+      });
+    });
+  }
+
+  // --- Compute time-in-zone using your zones ---
+  function computeTimeInZonesFromSamples(samples: Sample[], zones: Zone[]) {
+    // make sure samples sorted by time
+    const s = samples.slice().sort((a, b) => a.time - b.time);
+
+    const zoneSeconds: Record<string, number> = {};
+    zones.forEach((z) => (zoneSeconds[z.label] = 0));
+
+    let totalHrSeconds = 0;
+
+    if (s.length < 2) {
+      return {
+        zoneSeconds,
+        totalHrSeconds: 0,
+        avgHr: null,
+        maxHr: null,
+        minHr: null,
+      };
+    }
+
+    // iterate intervals between consecutive samples
+    for (let i = 0; i < s.length - 1; i++) {
+      const a = s[i];
+      const b = s[i + 1];
+      if (a.hr == null && b.hr == null) continue;
+      const dt = Math.max(0, (b.time - a.time) / 1000); // seconds
+      // average HR across interval (simple approach)
+      const hrA = a.hr ?? b.hr;
+      const hrB = b.hr ?? a.hr;
+      if (hrA == null || hrB == null) continue;
+      const avgHr = Math.round((hrA + hrB) / 2);
+      // find zone containing avgHr
+      const zone = zones.find((z) => avgHr >= z.bpmMin && avgHr <= z.bpmMax);
+      if (zone) {
+        zoneSeconds[zone.label] += dt;
+        totalHrSeconds += dt;
+      } else {
+        // HR outside defined zones - could be below zone1 or above zone5
+        // decide what to do; we'll ignore for the zone totals but still count
+        totalHrSeconds += dt;
+      }
+    }
+
+    // compute stats
+    const hrValues = s.map((x) => x.hr).filter(Boolean) as number[];
+    const avgHr = hrValues.length
+      ? Math.round(hrValues.reduce((a, b) => a + b, 0) / hrValues.length)
+      : null;
+    const maxHr = hrValues.length ? Math.max(...hrValues) : null;
+    const minHr = hrValues.length ? Math.min(...hrValues) : null;
+
+    // convert to percentages and array
+    const zoneTimes: ZoneTime[] = zones.map((z) => {
+      const sec = zoneSeconds[z.label] || 0;
+      return {
+        label: z.label,
+        seconds: Math.round(sec),
+        percent: totalHrSeconds ? Math.round((sec / totalHrSeconds) * 100) : 0,
+      };
+    });
+
+    return {
+      zoneTimes,
+      totalHrSeconds: Math.round(totalHrSeconds),
+      avgHr,
+      maxHr,
+      minHr,
+    };
+  }
 
   return (
     <>
@@ -510,6 +671,33 @@ export function InputSection() {
           </div>
         </div>
       </div>
+      {zoneAnalysis && (
+  <div className="mt-4 rounded-lg border p-3">
+    {zoneAnalysis.error ? (
+      <div className="text-sm text-red-600">{zoneAnalysis.error}</div>
+    ) : (
+      <>
+        <div className="text-xs text-muted-foreground">File HR summary</div>
+        <div className="mt-2 text-sm">
+          <div>Samples: {zoneAnalysis.samplesCount}</div>
+          <div>Duration with HR: {Math.round(zoneAnalysis.totalHrSeconds)} s</div>
+          <div>Avg HR: {zoneAnalysis.avgHr ?? '--'} BPM</div>
+          <div>Min HR: {zoneAnalysis.minHr ?? '--'} BPM</div>
+          <div>Max HR: {zoneAnalysis.maxHr ?? '--'} BPM</div>
+        </div>
+
+        <div className="mt-3">
+          {zoneAnalysis.zoneTimes.map((z: ZoneTime) => (
+            <div key={z.label} className="flex items-center justify-between text-sm border-t py-2">
+              <div>{z.label} — {z.percent}%</div>
+              <div>{Math.round(z.seconds)} s</div>
+            </div>
+          ))}
+        </div>
+      </>
+    )}
+  </div>
+)}
     </>
   );
 }
