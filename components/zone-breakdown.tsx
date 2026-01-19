@@ -1,51 +1,61 @@
 "use client"
 
-const zones = [
-  {
-    name: "Zone 1 - Recovery",
-    bpmRange: "111-130 bpm",
-    time: "8 mins",
-    percentage: 8,
-    color: "#6b7280",
-  },
-  {
-    name: "Zone 2 - Easy",
-    bpmRange: "130-145 bpm",
-    time: "55 mins",
-    percentage: 52,
-    color: "#00d4ff",
-  },
-  {
-    name: "Zone 3 - Aerobic",
-    bpmRange: "145-157 bpm",
-    time: "23 mins",
-    percentage: 22,
-    color: "#22c55e",
-  },
-  {
-    name: "Zone 4 - Threshold",
-    bpmRange: "157-172 bpm",
-    time: "14 mins",
-    percentage: 13,
-    color: "#f97316",
-  },
-  {
-    name: "Zone 5 - Max",
-    bpmRange: "172-185 bpm",
-    time: "5 mins",
-    percentage: 5,
-    color: "#ef4444",
-  },
-]
+interface ZoneTime {
+  label: string
+  seconds: number
+  percent: number
+}
 
-export function ZoneBreakdown({}) {
+interface Zone {
+  label: string
+  percentMin: number
+  percentMax: number
+  bpmMin: number
+  bpmMax: number
+}
+
+interface ZoneBreakdownProps {
+  zoneTimes: ZoneTime[]
+  zones: Zone[]
+}
+
+const ZONE_CONFIG: Record<string, { name: string; color: string }> = {
+  "Zone 1": { name: "Zone 1 - Recovery", color: "#6b7280" },
+  "Zone 2": { name: "Zone 2 - Easy", color: "#00d4ff" },
+  "Zone 3": { name: "Zone 3 - Aerobic", color: "#22c55e" },
+  "Zone 4": { name: "Zone 4 - Threshold", color: "#f97316" },
+  "Zone 5": { name: "Zone 5 - Max", color: "#ef4444" },
+}
+
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  if (mins === 0) {
+    return `${secs} secs`
+  }
+  return secs > 0 ? `${mins}m ${secs}s` : `${mins} mins`
+}
+
+export function ZoneBreakdown({ zoneTimes, zones }: ZoneBreakdownProps) {
+  // Combine zone times with zone BPM ranges
+  const combinedZones = zoneTimes.map((zt) => {
+    const zone = zones.find((z) => z.label === zt.label)
+    const config = ZONE_CONFIG[zt.label]
+    return {
+      name: config?.name || zt.label,
+      bpmRange: zone ? `${zone.bpmMin}-${zone.bpmMax} bpm` : "",
+      time: formatTime(zt.seconds),
+      percentage: zt.percent,
+      color: config?.color || "#6b7280",
+    }
+  })
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-medium text-muted-foreground">
         Zone Breakdown
       </h3>
       <div className="grid gap-2">
-        {zones.map((zone) => (
+        {combinedZones.map((zone) => (
           <div
             key={zone.name}
             className="flex items-center justify-between rounded-lg bg-card p-3 transition-colors hover:bg-card/80"

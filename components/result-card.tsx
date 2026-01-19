@@ -1,41 +1,56 @@
 "use client"
 
-import { Download, Calendar, Clock, Heart } from "lucide-react"
+import { Download, FileText, Clock, Heart } from "lucide-react"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ZoneChart } from "@/components/zone-chart"
 import { ZoneBreakdown } from "@/components/zone-breakdown"
+import type { WorkoutAnalysis } from "@/app/page"
 
-const workoutData = {
-  title: "Saturday Morning Long Run",
-  duration: "1:45:30",
-  avgHr: 138,
+interface ResultCardProps {
+  data: WorkoutAnalysis
 }
 
-export function ResultCard() {
+function formatDuration(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
+  const secs = seconds % 60
+  if (hrs > 0) {
+    return `${hrs}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  }
+  return `${mins}:${secs.toString().padStart(2, "0")}`
+}
+
+export function ResultCard({ data }: ResultCardProps) {
+  const { fileName, zoneTimes, zones, totalHrSeconds, avgHr } = data
+
   return (
     <Card className="border-border bg-secondary/50 shadow-xl">
       <CardHeader className="border-b border-border pb-4">
         <div className="flex flex-wrap items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-primary" />
-            <span className="font-medium text-foreground">{workoutData.title}</span>
+            <FileText className="h-4 w-4 text-primary" />
+            <span className="font-medium text-foreground">{fileName}</span>
           </div>
           <div className="h-4 w-px bg-border" />
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">{workoutData.duration} Duration</span>
+            <span className="text-muted-foreground">{formatDuration(totalHrSeconds)} Duration</span>
           </div>
-          <div className="h-4 w-px bg-border" />
-          <div className="flex items-center gap-2">
-            <Heart className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">Avg HR: {workoutData.avgHr} bpm</span>
-          </div>
+          {avgHr && (
+            <>
+              <div className="h-4 w-px bg-border" />
+              <div className="flex items-center gap-2">
+                <Heart className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Avg HR: {avgHr} bpm</span>
+              </div>
+            </>
+          )}
         </div>
       </CardHeader>
       <CardContent className="py-6">
-        <ZoneChart />
-        <ZoneBreakdown />
+        <ZoneChart zoneTimes={zoneTimes} />
+        <ZoneBreakdown zoneTimes={zoneTimes} zones={zones} />
       </CardContent>
       <CardFooter className="border-t border-border pt-6">
         <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90" size="lg">

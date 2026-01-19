@@ -10,29 +10,51 @@ import {
   Tooltip,
 } from "recharts"
 
-const zoneData = [
-  { name: "Zone Distribution", zone1: 8, zone2: 52, zone3: 22, zone4: 13, zone5: 5 },
-]
-
-
-
-const COLORS = {
-  zone1: "#6b7280", // Grey
-  zone2: "#00d4ff", // Electric Cyan
-  zone3: "#22c55e", // Green
-  zone4: "#f97316", // Orange
-  zone5: "#ef4444", // Red
+interface ZoneTime {
+  label: string
+  seconds: number
+  percent: number
 }
 
-const ZONE_LABELS = {
-  zone1: "Zone 1",
-  zone2: "Zone 2",
-  zone3: "Zone 3",
-  zone4: "Zone 4",
-  zone5: "Zone 5",
+interface ZoneChartProps {
+  zoneTimes: ZoneTime[]
 }
 
-export function ZoneChart({  }) {
+const ZONE_CONFIG: Record<string, { label: string; color: string }> = {
+  zone1: { label: "Zone 1", color: "#6b7280" },
+  zone2: { label: "Zone 2", color: "#00d4ff" },
+  zone3: { label: "Zone 3", color: "#22c55e" },
+  zone4: { label: "Zone 4", color: "#f97316" },
+  zone5: { label: "Zone 5", color: "#ef4444" },
+}
+
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  if (mins === 0) {
+    return `${secs}s`
+  }
+  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`
+}
+
+export function ZoneChart({ zoneTimes }: ZoneChartProps) {
+  // Create a lookup map for zone data
+  const zoneDataMap = Object.fromEntries(
+    zoneTimes.map((zt) => [zt.label, zt])
+  )
+
+  // Transform zoneTimes into the format needed for the stacked bar chart
+  const zoneData = [
+    {
+      name: "Zone Distribution",
+      zone1: zoneTimes.find((z) => z.label === "Zone 1")?.percent || 0,
+      zone2: zoneTimes.find((z) => z.label === "Zone 2")?.percent || 0,
+      zone3: zoneTimes.find((z) => z.label === "Zone 3")?.percent || 0,
+      zone4: zoneTimes.find((z) => z.label === "Zone 4")?.percent || 0,
+      zone5: zoneTimes.find((z) => z.label === "Zone 5")?.percent || 0,
+    },
+  ]
+
   return (
     <div className="mb-8">
       <h3 className="mb-4 text-sm font-medium text-muted-foreground">
@@ -48,51 +70,33 @@ export function ZoneChart({  }) {
           >
             <XAxis type="number" hide domain={[0, 100]} />
             <YAxis type="category" dataKey="name" hide />
-            <Tooltip
-              cursor={false}
-              content={({ active, payload }) => {
-                if (active && payload && payload.length) {
-                  const data = payload[0]
-                  const zoneName = ZONE_LABELS[data.dataKey as keyof typeof ZONE_LABELS]
-                  return (
-                    <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-lg">
-                      <p className="text-sm font-medium text-foreground">
-                        {zoneName}: {data.value}%
-                      </p>
-                    </div>
-                  )
-                }
-                return null
-              }}
-            />
+            
             <Bar dataKey="zone1" stackId="a" radius={[8, 0, 0, 8]}>
-              <Cell fill={COLORS.zone1} />
+              <Cell fill={ZONE_CONFIG.zone1.color} />
             </Bar>
             <Bar dataKey="zone2" stackId="a">
-              <Cell fill={COLORS.zone2} />
+              <Cell fill={ZONE_CONFIG.zone2.color} />
             </Bar>
             <Bar dataKey="zone3" stackId="a">
-              <Cell fill={COLORS.zone3} />
+              <Cell fill={ZONE_CONFIG.zone3.color} />
             </Bar>
             <Bar dataKey="zone4" stackId="a">
-              <Cell fill={COLORS.zone4} />
+              <Cell fill={ZONE_CONFIG.zone4.color} />
             </Bar>
             <Bar dataKey="zone5" stackId="a" radius={[0, 8, 8, 0]}>
-              <Cell fill={COLORS.zone5} />
+              <Cell fill={ZONE_CONFIG.zone5.color} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
       <div className="mt-4 flex flex-wrap justify-center gap-4">
-        {Object.entries(COLORS).map(([zone, color]) => (
-          <div key={zone} className="flex items-center gap-2">
+        {Object.entries(ZONE_CONFIG).map(([key, config]) => (
+          <div key={key} className="flex items-center gap-2">
             <div
               className="h-3 w-3 rounded-full"
-              style={{ backgroundColor: color }}
+              style={{ backgroundColor: config.color }}
             />
-            <span className="text-xs text-muted-foreground">
-              {ZONE_LABELS[zone as keyof typeof ZONE_LABELS]}
-            </span>
+            <span className="text-xs text-muted-foreground">{config.label}</span>
           </div>
         ))}
       </div>

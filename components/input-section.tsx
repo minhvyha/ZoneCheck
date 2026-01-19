@@ -135,16 +135,44 @@ function computeZones(
   });
 }
 
+/* ---------- Types ---------- */
+
+export interface ZoneTime {
+  label: string;
+  seconds: number;
+  percent: number;
+}
+
+export interface WorkoutAnalysis {
+  fileName: string;
+  zoneTimes: ZoneTime[];
+  zones: Zone[];
+  totalHrSeconds: number;
+  avgHr: number | null;
+  maxHr: number | null;
+  minHr: number | null;
+  error?: string;
+}
+
+interface InputSectionProps {
+  onAnalysisComplete?: (analysis: WorkoutAnalysis | null) => void;
+}
+
 /* ---------- Component ---------- */
 
-export function InputSection() {
+type Sample = { time: number /* epoch ms */; hr: number | null };
+
+export function InputSection({ onAnalysisComplete }: InputSectionProps) {
   const [formula, setFormula] = useState<FormulaType>("fox");
   const [age, setAge] = useState("30");
   const [restingHr, setRestingHr] = useState("60");
   const [customMaxHr, setCustomMaxHr] = useState("185");
   const [isDragOver, setIsDragOver] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [zoneAnalysis, setZoneAnalysis] = useState<any | null>(null);
+  const [samples, setSamples] = useState<Sample[] | null>(null);
+  const [zoneAnalysis, setZoneAnalysis] = useState<WorkoutAnalysis | null>(
+    null,
+  );
 
   /* ---------- Derived value ---------- */
   const calculatedMaxHr = useMemo(() => {
@@ -176,6 +204,33 @@ export function InputSection() {
   // current zones for the selected formula stored in a variable
   const zonesForSelectedFormula = allZones[formula];
 
+  // Recalculate zone analysis when formula or parameters change
+  React.useEffect(() => {
+    if (!samples || !fileName) return;
+
+    const ageNum = parseInt(age) || 30;
+    const restingNum = parseInt(restingHr) || 60;
+    const maxHr =
+      formula === "custom"
+        ? parseInt(customMaxHr) || 0
+        : formulas[formula].calculate(ageNum, restingNum);
+    const useHrr = formula === "karvonen";
+    const zones = computeZones(maxHr, restingNum, useHrr);
+
+    const analysis = computeTimeInZonesFromSamples(samples, zones);
+    const workoutAnalysis: WorkoutAnalysis = {
+      fileName,
+      zones,
+      zoneTimes: analysis.zoneTimes || [],
+      totalHrSeconds: analysis.totalHrSeconds,
+      avgHr: analysis.avgHr,
+      maxHr: analysis.maxHr,
+      minHr: analysis.minHr,
+    };
+    setZoneAnalysis(workoutAnalysis);
+    onAnalysisComplete?.(workoutAnalysis);
+  }, [formula, age, restingHr, customMaxHr, samples, fileName, onAnalysisComplete]);
+
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
@@ -185,18 +240,33 @@ export function InputSection() {
       setFileName(file.name);
 
       try {
-        let samples: Sample[] = [];
+        let parsedSamples: Sample[] = [];
         if (file.name.toLowerCase().endsWith(".gpx")) {
-          samples = await parseGpxFile(file);
+          parsedSamples = await parseGpxFile(file);
         } else if (file.name.toLowerCase().endsWith(".fit")) {
-          samples = await parseFitFile(file);
+          parsedSamples = await parseFitFile(file);
         }
 
         // if no HR samples found
-        if (!samples.length || samples.every((s) => s.hr == null)) {
-          setZoneAnalysis({ error: "No heart rate data found in file." });
+        if (!parsedSamples.length || parsedSamples.every((s) => s.hr == null)) {
+          const errorAnalysis: WorkoutAnalysis = {
+            fileName: file.name,
+            zoneTimes: [],
+            zones: [],
+            totalHrSeconds: 0,
+            avgHr: null,
+            maxHr: null,
+            minHr: null,
+            error: "No heart rate data found in file.",
+          };
+          setSamples(null);
+          setZoneAnalysis(errorAnalysis);
+          onAnalysisComplete?.(errorAnalysis);
           return;
         }
+
+        // Store samples for later recalculation
+        setSamples(parsedSamples);
 
         // compute zones for the currently selected formula
         const ageNum = parseInt(age) || 30;
@@ -208,14 +278,36 @@ export function InputSection() {
         const useHrr = formula === "karvonen";
         const zones = computeZones(maxHr, restingNum, useHrr);
 
-        const analysis = computeTimeInZonesFromSamples(samples, zones);
-        setZoneAnalysis({ samplesCount: samples.length, zones, ...analysis });
+        const analysis = computeTimeInZonesFromSamples(parsedSamples, zones);
+        const workoutAnalysis: WorkoutAnalysis = {
+          fileName: file.name,
+          zones,
+          zoneTimes: analysis.zoneTimes || [],
+          totalHrSeconds: analysis.totalHrSeconds,
+          avgHr: analysis.avgHr,
+          maxHr: analysis.maxHr,
+          minHr: analysis.minHr,
+        };
+        setZoneAnalysis(workoutAnalysis);
+        onAnalysisComplete?.(workoutAnalysis);
       } catch (err) {
         console.error(err);
-        setZoneAnalysis({ error: "Failed to parse file." });
+        const errorAnalysis: WorkoutAnalysis = {
+          fileName: file.name,
+          zoneTimes: [],
+          zones: [],
+          totalHrSeconds: 0,
+          avgHr: null,
+          maxHr: null,
+          minHr: null,
+          error: "Failed to parse file.",
+        };
+        setSamples(null);
+        setZoneAnalysis(errorAnalysis);
+        onAnalysisComplete?.(errorAnalysis);
       }
     },
-    [formula, age, restingHr, customMaxHr],
+    [formula, age, restingHr, customMaxHr, onAnalysisComplete],
   );
 
   /* ---------- Handlers as named functions ---------- */
@@ -671,7 +763,6 @@ export function InputSection() {
           </div>
         </div>
       </div>
-     
     </>
   );
 }
